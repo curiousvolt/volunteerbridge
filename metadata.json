@@ -1,0 +1,6 @@
+{
+  "name": "NSS Volunteer-NGO Matching Platform",
+  "description": "An intelligent skill-matching, milestone-tracking, and NGO verification portal connecting Indian college students to verified social sector projects.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

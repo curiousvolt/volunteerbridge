@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the platform, can be a student, NGO, or NSS Coordinator.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["student", "ngo", "nss"] },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "emailVerified": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "college": { "type": "string" },
+        "skills": { "type": "array" },
+        "causes": { "type": "array" },
+        "location": { "type": "string" },
+        "availability": { "type": "number" },
+        "nssEnrolled": { "type": "boolean" },
+        "darpanId": { "type": "string" },
+        "verificationStatus": { "type": "string", "enum": ["PENDING", "VERIFIED", "REJECTED", "UNSUBMITTED"] },
+        "is80G": { "type": "boolean" },
+        "isFcra": { "type": "boolean" },
+        "mcaRegistered": { "type": "boolean" }
+      },
+      "required": ["role", "name", "email", "createdAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A volunteering project created by an NGO.",
+      "type": "object",
+      "properties": {
+        "ngoId": { "type": "string" },
+        "ngoName": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "causes": { "type": "array" },
+        "requiredSkills": { "type": "array" },
+        "location": { "type": "string" },
+        "hoursRequired": { "type": "number" },
+        "durationWeeks": { "type": "number" },
+        "isVerified": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["ngoId", "title", "description", "createdAt"]
+    },
+    "Application": {
+      "title": "Application",
+      "description": "A student's application to a project.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "ngoId": { "type": "string" },
+        "status": { "type": "string", "enum": ["APPLIED", "ACTIVE", "COMPLETED", "FEEDBACK_SUBMITTED", "DECLINED"] },
+        "appliedAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["studentId", "projectId", "ngoId", "status", "appliedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Stores projects."
+    },
+    "/applications/{applicationId}": {
+      "schema": { "$ref": "#/entities/Application" },
+      "description": "Stores applications."
+    }
+  }
+}

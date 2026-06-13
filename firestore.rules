@@ -1,0 +1,129 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Deny all by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function isSignedIn()  { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming()    { return request.resource.data; }
+    function existing()    { return resource.data; }
+
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isNSS() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        getRole() == 'nss';
+    }
+    function isNGO() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        getRole() == 'ngo';
+    }
+
+    // ── USERS ──────────────────────────────────────────────────────────────
+    function isValidUser(data) {
+      return data.keys().hasAll(['role', 'name', 'email', 'createdAt']) &&
+        data.role is string && data.role in ['student', 'ngo', 'nss'] &&
+        data.name is string && data.name.size() > 0 &&
+        data.email is string &&
+        data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      // Anyone signed in can read user profiles (needed for student/NGO name display)
+      allow read: if isSignedIn();
+      // User can create own profile
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      // User can update own profile; NSS can update NGO verificationStatus
+      allow update: if isSignedIn() && (
+        request.auth.uid == userId ||
+        (isNSS() && incoming().diff(existing()).affectedKeys().hasOnly(['verificationStatus', 'updatedAt']))
+      );
+    }
+
+    // ── PROJECTS ───────────────────────────────────────────────────────────
+    function isValidProject(data) {
+      return data.keys().hasAll(['ngoId', 'title', 'description', 'createdAt']) &&
+        data.ngoId is string && isValidId(data.ngoId) &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+        data.description is string && data.description.size() > 0 && data.description.size() <= 5000 &&
+        data.createdAt is timestamp;
+    }
+
+    match /projects/{projectId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+        isValidProject(incoming()) &&
+        incoming().ngoId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(incoming().ngoId));
+      allow update: if isSignedIn() &&
+        existing().ngoId == request.auth.uid &&
+        isValidProject(incoming()) &&
+        incoming().ngoId == existing().ngoId &&
+        incoming().createdAt == existing().createdAt;
+      allow delete: if isSignedIn() && existing().ngoId == request.auth.uid;
+    }
+
+    // ── APPLICATIONS ───────────────────────────────────────────────────────
+    function isValidApplication(data) {
+      return data.keys().hasAll(['studentId', 'projectId', 'ngoId', 'status', 'appliedAt']) &&
+        data.studentId is string && isValidId(data.studentId) &&
+        data.projectId is string && isValidId(data.projectId) &&
+        data.ngoId is string && isValidId(data.ngoId) &&
+        data.status is string && data.status in ['APPLIED', 'ACTIVE', 'COMPLETED', 'FEEDBACK_SUBMITTED', 'DECLINED'] &&
+        data.appliedAt is timestamp;
+    }
+
+    match /applications/{applicationId} {
+      allow read: if isSignedIn() && (
+        resource.data.studentId == request.auth.uid ||
+        resource.data.ngoId == request.auth.uid ||
+        isNSS()
+      );
+      allow create: if isSignedIn() &&
+        isValidApplication(incoming()) &&
+        incoming().studentId == request.auth.uid &&
+        incoming().appliedAt == request.time;
+      allow update: if isSignedIn() && (
+        existing().studentId == request.auth.uid ||
+        existing().ngoId == request.auth.uid ||
+        isNSS()
+      ) &&
+        incoming().studentId == existing().studentId &&
+        incoming().projectId == existing().projectId &&
+        incoming().ngoId == existing().ngoId;
+    }
+
+    // ── FEEDBACK ───────────────────────────────────────────────────────────
+    function isValidFeedback(data) {
+      return data.keys().hasAll(['applicationId', 'fromId', 'toId', 'fromRole', 'rating', 'createdAt']) &&
+        data.applicationId is string &&
+        data.fromId is string &&
+        data.toId is string &&
+        data.fromRole is string && data.fromRole in ['student', 'ngo'] &&
+        data.rating is int && data.rating >= 1 && data.rating <= 5 &&
+        data.createdAt is timestamp;
+    }
+
+    match /feedback/{feedbackId} {
+      allow read: if isSignedIn() && (
+        resource.data.fromId == request.auth.uid ||
+        resource.data.toId == request.auth.uid ||
+        isNSS()
+      );
+      allow create: if isSignedIn() &&
+        isValidFeedback(incoming()) &&
+        incoming().fromId == request.auth.uid &&
+        incoming().createdAt == request.time;
+      // No updates allowed — feedback is immutable
+    }
+  }
+}
